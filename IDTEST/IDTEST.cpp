@@ -1,12 +1,84 @@
 #include <stdio.h>
-#include<iostream>
+#include <iostream>
 #include <windows.h>
 #include <setupapi.h>
 #include <devguid.h>
 #include <regstr.h>
+#include <atlstr.h>
 #pragma comment(lib,"Setupapi.lib")
 
 #define INTERFACE_DETAIL_SIZE (1024)
+
+
+
+//
+//设置相对于当前位置的打印位置
+//单位1/96英寸
+void OffSetPosXY(HANDLE hCom ,int x , int y);
+
+//
+//退纸命令
+//注意，退纸的最大值设定不能大于当前的Y坐标
+//也就是说不改变页长的情况下，退纸不可能退到上一页中去
+//单位1/96英寸
+void BackScrollPosY(HANDLE hCom , int y);
+
+//
+//换页
+//
+void NextPage(HANDLE hCom);
+
+//
+//设置页高度
+//
+//参数3的取值0 ， 1 ， 2，分别表示按英寸，行，自定义单位设置页长
+//0表示英寸为单位(0~22)		
+//1表示行为单位(0~127)	
+//2表示自定义单位, 
+//当参数3为2时，参数4有效
+//参数4取值10 ，20 ， 30 ，40 ， 50 ， 60
+void SetPageHeight(HANDLE hCom ,int pHeight , char unit , int scale);
+
+//
+//打印字符串
+//
+void PrintStr(HANDLE hCom , LPCTSTR str);
+
+
+//
+//初始化并清除缓冲区,恢复默认设置
+//
+void PurgePrintSetting(HANDLE hCom);
+
+//
+//换行
+//
+void NextLine(HANDLE hCom);
+
+//
+//字体设定
+//0为宋体，1为黑体
+void SetFont(HANDLE hCom , BOOL han);
+
+//
+//字体放大2倍
+//
+void SetWordSizeTwice(HANDLE hCom );
+
+//
+//解除2倍字体
+//
+void RemoveWordSizeTwice(HANDLE hCom );
+
+//
+//设定字符间距，指令是1B 20 n(0~127)，单位1/180英寸。默认0
+//但前提是当前是英文模式
+void SetCHSpace(HANDLE hCom ,int nSpace);
+
+//
+//设置回默认字符间距，指令是1B 20 n(0~127)，单位1/180英寸。默认0
+//即设置字符间距为0，在设置回中文模式
+void SetDefaultCHSpace(HANDLE hCom );
 
 
 int main()
@@ -119,7 +191,7 @@ int main()
 		}
 
 		printf("I'm doing a Write test...\n");
-
+/*
 		BYTE* pOut = new BYTE[100];
 		char* buf;
 		buf = (char*)malloc(100);
@@ -141,6 +213,20 @@ int main()
 			printf("I'm sorry! write error!\n");
 			return false;
 		}
+*/
+
+
+
+
+
+
+
+
+		PurgePrintSetting(hHandle);
+		SetPageHeight(hHandle,127,1,0);
+		SetDefaultCHSpace(hHandle);
+		SetFont(hHandle,1);
+		PrintStr(hHandle,"i want to contact you HP");
 		printf("YES,write data ok!\n");
 	}
 	else
@@ -153,165 +239,228 @@ int main()
 
 
 
+//
+//设置相对于当前位置的打印位置
+//
+void OffSetPosXY(HANDLE hCom ,int x , int y)//单位1/60英寸
+{
+	unsigned long cnt = 0;
 
+	//先处理Y坐标，在X坐标
+	char YPos[3] = {0x1B , 0x4A , 0x00};
+	int LineNum = 0; //需要换多少个85/60英寸		//整步
+	int LineRem = 0; //需要换多少个1/60英寸			//小碎步
+	y = y * 3;
 
-
-
-
-		
-
-
-
-
-
-/*	
-	
-	int i =0;
-
-	while(1)
+	//如果当前换行数超过255（单位1/180英寸），则需要两次或多次换行
+	if (y > 255)
 	{
-		//ifdata.cbSize = sizeof(ifdata);
-		
-		BOOL bResult  = SetupDiEnumDeviceInterfaces(hDevInfo, NULL,&testguid,i, &ifdata);
-		if(bResult == 0)
-		{
-        	SetupDiDestroyDeviceInfoList(hDevInfo);
-			if(GetLastError() == ERROR_NO_MORE_ITEMS)
-			{
-				break;
-			}
-		}
-		else
-		{
-			length = 0;
-			bResult = SetupDiGetInterfaceDeviceDetail(hDevInfo,&ifdata,NULL,0,&length,NULL);
-			if(bResult==0)
-			{
-					if(ERROR_INSUFFICIENT_BUFFER != (GetLastError()))
-					{
-							i++;
-							continue;
-					}
-			}
-			DeviceInfoData = (PSP_DEVICE_INTERFACE_DETAIL_DATA)LocalAlloc(LMEM_ZEROINIT,length);
-			if(NULL == DeviceInfoData)
-			{
-					SetupDiDestroyDeviceInfoList(hDevInfo);
-					return 0;
-			}
-
-			DeviceInfoData->cbSize = sizeof( SP_DEVICE_INTERFACE_DETAIL_DATA);
-			if(!SetupDiGetInterfaceDeviceDetail(hDevInfo,&ifdata,DeviceInfoData,length,NULL,NULL))
-			{
-					LocalFree(DeviceInfoData);
-					i++;
-					continue;
-			}
-
-			std::cout<<DeviceInfoData->DevicePath<<std::endl;
-			break;
-			}
+		LineNum = y / 255;
+		LineRem = y % 255;
 	}
-	 //strcpy(interfacename,DeviceInfoData->DevicePath);
-//      strcpy_s(interfacename, sizeof("\\\\.\\USB001"), "\\\\.\\USB001");
-     HANDLE BradyUSB = CreateFile(DeviceInfoData->DevicePath,
-                                     GENERIC_READ | GENERIC_WRITE,
-                                     FILE_SHARE_READ | FILE_SHARE_WRITE,
-                                     NULL,
-                                     OPEN_ALWAYS,
-                                     FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN | FILE_FLAG_OVERLAPPED,
-                                     NULL);
-//	TRACE(interfacename);
-//	TRACE("\n");
- 
-    if (BradyUSB == INVALID_HANDLE_VALUE)
+	else//没超过一整步
 	{
-		char* mybuf;
-        mybuf = (char*) malloc(128);
-       // wsprintf(mybuf, "Did not open Brady printer");
-        //AfxMessageBox(mybuf, MB_OK | MB_ICONEXCLAMATION, 0);
-        free(mybuf);
-        }
-	else 
+		LineRem = y;
+	}
+	for (int i = 0 ; i < LineNum ; i++)//换几个整步
 	{
-		// Write to the printer
-        OVERLAPPED olWrite = { 0 };
-        olWrite.hEvent = CreateEvent(NULL,TRUE,FALSE,NULL);
-        char cCommand1, cCommand2, cTermChar, cAllCommand[5];
-        DWORD dwBytesWritten;
-        DWORD dwBytesToWrite;
-        bool writeSuccess;
-        cCommand1 = 0x01;
-        cCommand2 = '#';
-        cTermChar = '\n';
+		YPos[2] = 255;
+		::WriteFile(hCom , YPos , sizeof(YPos) ,&cnt , 0);
+	}
+	YPos[2] = LineRem;					//换小碎步
+	::WriteFile(hCom , YPos , sizeof(YPos) ,&cnt , 0);
 
-		strcpy(cAllCommand,"\x0D\x1B\x30");
-
-        dwBytesToWrite = 3;
-        if(!WriteFile(BradyUSB, cAllCommand, dwBytesToWrite, &dwBytesWritten, &olWrite)) 
-		{
-			// Wait until write operation is complete
-            bool done = false;
-            while (!done) 
-			{
-				WaitForSingleObject(olWrite.hEvent, INFINITE);
-                if (!GetOverlappedResult(BradyUSB, &olWrite, &dwBytesWritten, FALSE)) 
-				{
-					if (!(GetLastError() == ERROR_IO_PENDING)) 
-					{
-						// Get out of loop and check for bytes written
-                        done = true;
-					} // IO Pending
-				} else // GetOverlappedResult
-					done = true;
-			} // while loop
-		} // write file
-        if (dwBytesWritten == 0)
-		{
-			char* mywriteerrorbuf;
-            mywriteerrorbuf = (char*) malloc(64);
-           // wsprintf(mywriteerrorbuf, "Write error!");
-           // AfxMessageBox(mywriteerrorbuf, MB_OK | MB_ICONEXCLAMATION, 0);
-            free(mywriteerrorbuf);
-            writeSuccess = false;
-		} else
-			writeSuccess = true;
-		if (writeSuccess) 
-		{  // Write was a success, let's read
-			// Clear the error
-            SetLastError(0);
-            ResetEvent(olWrite.hEvent);
-            char myreadbuf[10];
-            OVERLAPPED olRead = { 0 };
-            olRead.hEvent = CreateEvent(NULL,TRUE,FALSE,NULL);
-            DWORD dwBytesRead;
-			myreadbuf[9] = '\0';
-
-            if (!ReadFile(BradyUSB, &myreadbuf, 0x100, &dwBytesRead, &olRead)) 
-			{
-                    // Wait for read operation to complete
-				int retval = WaitForSingleObject(olRead.hEvent,5000);
-            }
-            if (dwBytesRead == 0)
-			{
-				// Nothing was read.
-                char* myreaderrorbuf;
-                myreaderrorbuf = (char*) malloc(64);
-               // wsprintf(myreaderrorbuf, "Nothing to read!");
-                //AfxMessageBox(myreaderrorbuf, MB_OK | MB_ICONEXCLAMATION, 0);
-                free(myreaderrorbuf);
-			}
-		} // Write success
-	}  // Printer handle
-    if (BradyUSB != INVALID_HANDLE_VALUE)
-		CloseHandle(BradyUSB);
-// for loop
-
-
-
-	//delete(DeviceInfoData);
-	(void)SetupDiDestroyDeviceInfoList(hDevInfo);
-	return 0;
+	//X坐标
+	char XPos[4] = {0x1B , 0x24 , 0x00 , 0x00};
+	XPos[3] = x / 255;
+	XPos[2] = x % 255;
+	::WriteFile(hCom , XPos , sizeof(XPos) ,&cnt , 0);
 }
 
-*/
+//
+//退纸命令
+//注意，退纸的最大值设定不能大于当前的Y坐标
+//也就是说不改变页长的情况下，退纸不可能退到上一页中去
+//
+void BackScrollPosY(HANDLE hCom , int y)
+{
+	unsigned long cnt = 0;
+
+	//先处理Y坐标，在X坐标
+	char YPos[3] = {0x1B , 0x6A , 0x00};
+	int LineNum = 0; //需要换多少个85/60英寸		//整步
+	int LineRem = 0; //需要换多少个1/60英寸			//小碎步
+	y = y * 3;
+
+	//如果当前换行数超过255（单位1/180英寸），则需要两次或多次换行
+	if (y > 255)
+	{
+		LineNum = y / 255;
+		LineRem = y % 255;
+	}
+	else//没超过一整步
+	{
+		LineRem = y;
+	}
+	for (int i = 0 ; i < LineNum ; i++)//换几个整步
+	{
+		YPos[2] = 255;
+		::WriteFile(hCom , YPos , sizeof(YPos) ,&cnt , 0);
+	}
+	YPos[2] = LineRem;					//换小碎步
+	::WriteFile(hCom , YPos , sizeof(YPos) ,&cnt , 0);
+
+}
+
+//
+//换页
+//
+void NextPage(HANDLE hCom)
+{
+	unsigned long cnt = 0;
+	char chNextPage[] = {0x0C};
+	::WriteFile(hCom , chNextPage , (DWORD)1L , &cnt , 0);
+}
+
+//
+//设置页高度
+//
+//参数3的取值0 ， 1 ， 2，分别表示按英寸，行，自定义单位设置页长
+//0表示英寸为单位(0~22)		
+//1表示行为单位(0~127)	
+//2表示自定义单位, 
+//当参数3为2时，参数4有效
+//参数4取值10 ，20 ， 30 ，40 ， 50 ， 60
+void SetPageHeight(HANDLE hCom ,int pHeight , char unit , int scale)
+{
+	unsigned long cnt = 0;
+
+	if (0 == unit)//inch
+	{
+		char pageHeightInch[4] = {0x1B , 0x43 , 0x00 , 0x00};//0x00~0x16(0~22)
+		pageHeightInch[3] = pHeight;
+		::WriteFile(hCom , pageHeightInch , sizeof(pageHeightInch) ,&cnt , 0);
+	}
+
+	else if (1 == unit)//line
+	{
+		char pageHeightLine[3] = {0x1B , 0x43 , 0x00};//0x00~0x7F(0~127)
+		pageHeightLine[2] = pHeight;
+		::WriteFile(hCom , pageHeightLine , sizeof(pageHeightLine) ,&cnt , 0);
+	}
+	else if (2 == unit) //custom
+	{
+		char pageHeightCustomScale[] = {0x1B , 0x28 , 0x55 , 0x01 , 0 , 0};
+		pageHeightCustomScale[5] = scale;
+		::WriteFile(hCom , pageHeightCustomScale , sizeof(pageHeightCustomScale) ,&cnt , 0);
+
+		char pageHeighCustom[] = {0x1B , 0x28 , 0x43 , 0x2 , 0 , 0x0 , 0x00};
+		pageHeighCustom[5] = pHeight % 255;
+		pageHeighCustom[6] = pHeight / 255;
+		::WriteFile(hCom , pageHeighCustom , sizeof(pageHeighCustom) ,&cnt , 0);
+	}
+
+}
+
+//
+//打印字符串
+//
+void PrintStr(HANDLE hCom , LPCTSTR str)
+{
+	unsigned long cnt = 0;
+	//char* pPrint = new char[str.GetLength()];
+	int len = _tcslen(str);
+	char* pPrint = new char[len];
+	pPrint = (char* )str;
+	::WriteFile(hCom , pPrint , (DWORD)len , &cnt , 0);
+
+	unsigned char chEnterCode[] = { 0x0D };//在输入一个回车，开始打印
+	::WriteFile(hCom , chEnterCode , sizeof(chEnterCode) ,&cnt , 0);
+}
+
+
+//
+//初始化并清除缓冲区,恢复默认设置
+//
+void PurgePrintSetting(HANDLE hCom)
+{
+	unsigned long cnt = 0;
+	unsigned char chInitCode[] = { 0x0D , 0x1B , 0x40 , 0x18};//打印机初始化,清除缓冲区
+	::WriteFile(hCom , chInitCode , sizeof(chInitCode) ,&cnt , 0);
+}
+
+//
+//换行
+//
+void NextLine(HANDLE hCom)
+{
+	unsigned long cnt = 0;
+	unsigned char chNextLine[] = { 0x0A };//换行
+	::WriteFile(hCom , chNextLine , sizeof(chNextLine) ,&cnt , 0);
+}
+
+//
+//字体设定
+//
+void SetFont(HANDLE hCom , BOOL han)//0为宋体，1为黑体
+{
+	unsigned long cnt = 0;
+	if (0 == han)//宋体
+	{
+		unsigned char chFontSong[] = { 0x1C , 0x6B , 0x00 };
+		::WriteFile(hCom , chFontSong , sizeof(chFontSong) ,&cnt , 0);
+	}
+	else//黑体
+	{
+		unsigned char chFontHei[] = { 0x1C , 0x6B , 0x01 };
+		::WriteFile(hCom , chFontHei , sizeof(chFontHei) ,&cnt , 0);
+	}
+
+}
+
+//
+//字体放大2倍
+//
+void SetWordSizeTwice(HANDLE hCom )
+{
+	unsigned long cnt = 0;
+	unsigned char chFontDouble[] = { 0x1B , 0x49 , 0x44 ,0x0D};
+	::WriteFile(hCom , chFontDouble , sizeof(chFontDouble) ,&cnt , 0);
+}
+
+//
+//解除2倍字体
+//
+void RemoveWordSizeTwice(HANDLE hCom )
+{
+	unsigned long cnt = 0;
+	unsigned char chFontDouble[] = { 0x1B , 0x49 , 0x41 ,0x0D};
+	::WriteFile(hCom , chFontDouble , sizeof(chFontDouble) ,&cnt , 0);
+}
+
+//
+//设定字符间距，指令是1B 20 n(0~127)，单位1/180英寸。默认0
+//先设置成英文模式
+void SetCHSpace(HANDLE hCom ,int nSpace)
+{
+	unsigned long cnt = 0;
+	unsigned char EnMode[] = {0x1C , 0x2E};
+	::WriteFile(hCom , EnMode , sizeof(EnMode) ,&cnt , 0);
+
+	unsigned char chSpaceCmd[] = { 0x1B , 0x20 , 0x0};
+	chSpaceCmd[2] = nSpace;
+	::WriteFile(hCom , chSpaceCmd , sizeof(chSpaceCmd) ,&cnt , 0);
+}
+
+//
+//设置回默认字符间距，指令是1B 20 n(0~127)，单位1/180英寸。默认0
+//即设置字符间距为0，在设置回中文模式
+void SetDefaultCHSpace(HANDLE hCom )
+{
+	unsigned long cnt = 0;
+	unsigned char chSpaceCmd[] = { 0x1B , 0x20 , 0x0};
+	::WriteFile(hCom , chSpaceCmd , sizeof(chSpaceCmd) ,&cnt , 0);
+
+	unsigned char HanMode[] = {0x1C , 0x26};
+	::WriteFile(hCom , HanMode , sizeof(HanMode) ,&cnt , 0);
+}
